@@ -15,10 +15,10 @@
  * real pasted messages routinely omit it.
  *
  * Returned spans are relative to the `text` argument only. If `text` is
- * itself a substring another function extracted (e.g. a RawMessage.text
- * from parseThread.ts), the caller must add that substring's own span.start
- * to translate a returned span back to the original raw string's offsets —
- * this function has no way to know it was given a substring.
+ * itself a substring another function extracted, the caller must add that
+ * substring's own span.start to translate a returned span back to the
+ * original string's offsets — this function has no way to know it was
+ * given a substring.
  */
 import type { Span } from "./types.js";
 
