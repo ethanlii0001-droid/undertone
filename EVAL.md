@@ -910,7 +910,7 @@ For families 1–3, the force-bearing context is held constant while surface rea
     "id": "ext-01",
     "family": "external-only",
     "a": "Could you review the deck?",
-    "b": "Could you review the deck? The client call is Thursday and the deck must be ready before it.",
+    "b": "Could you review the deck? The client call is on Thursday and the deck must be ready before it.",
     "expected": {
       "surfaceDeltaMax": 1e-09,
       "forceRelation": "b > a",
@@ -923,7 +923,7 @@ For families 1–3, the force-bearing context is held constant while surface rea
     "id": "ext-02",
     "family": "external-only",
     "a": "Could you submit the expense report?",
-    "b": "Could you submit the expense report? Finance cannot reimburse it this cycle until it is submitted.",
+    "b": "Could you submit the expense report? Finance is blocked until it is submitted this cycle.",
     "expected": {
       "surfaceDeltaMax": 1e-09,
       "forceRelation": "b > a",
@@ -975,7 +975,7 @@ For families 1–3, the force-bearing context is held constant while surface rea
     "id": "ext-06",
     "family": "external-only",
     "a": "Could you confirm the headcount?",
-    "b": "Could you confirm the headcount? The board deck goes out tonight and this is the last missing number.",
+    "b": "Could you confirm the headcount? The board deck goes out by EOD and this is the last thing we're missing.",
     "expected": {
       "surfaceDeltaMax": 1e-09,
       "forceRelation": "b > a",
@@ -1001,7 +1001,7 @@ For families 1–3, the force-bearing context is held constant while surface rea
     "id": "ext-08",
     "family": "external-only",
     "a": "Could you confirm Thursday's on-call coverage?",
-    "b": "Could you confirm Thursday's on-call coverage? The rota cannot be published until coverage is confirmed.",
+    "b": "Could you confirm Thursday's on-call coverage? The rota is blocked until coverage is confirmed.",
     "expected": {
       "surfaceDeltaMax": 1e-09,
       "forceRelation": "b > a",
