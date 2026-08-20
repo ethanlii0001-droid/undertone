@@ -34,6 +34,29 @@ export type Scorer = "surface" | "force";
 // Input model
 // ---------------------------------------------------------------------------
 
+/**
+ * The result of parseThread's best-effort extraction of one message from a
+ * raw pasted thread (Slack/Teams/email-quote/unstructured), before any of
+ * SPEC.md §4's Message fields (senderId resolution, ISO 8601 timestamp
+ * parsing, threadId assignment) exist. NOT part of SPEC.md's data model —
+ * parseThread and RawMessage are new, unspecified functionality; SPEC.md's
+ * pipeline (§5) assumes a Message/Thread already exists and says nothing
+ * about how raw pasted text becomes one.
+ *
+ * `span` always delimits an exact substring of parseThread's input
+ * (`text === raw.slice(span.start, span.end)`), so every downstream span
+ * built from this message's text and composed with `span.start` indexes
+ * into the original raw paste, per CLAUDE.md's evidence-traceability rule.
+ */
+export interface RawMessage {
+  /** Raw display name as parsed from the paste, or "unknown" if no sender header was detected. */
+  sender: string;
+  /** Raw timestamp text as it appeared in the paste (e.g. "10:32 AM"), unparsed — null if no timestamp was detected. */
+  timestamp: string | null;
+  text: string;
+  span: Span;
+}
+
 /** A single workplace message. SPEC.md §4. */
 export interface Message {
   id: MessageId;
