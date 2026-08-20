@@ -218,6 +218,15 @@ function buildRequestSignature(text: string, requestClauseSpan: Span): readonly 
 }
 
 /**
+ * Deterministic empty structural span used by `buildContextMaskedMessage`
+ * below for a message that carries no request at all — there is no head
+ * act, so there is no request clause to point to (SPEC.md §10's
+ * `requestClauseSpan` is a structural boundary, and an empty `[0, 0)` span
+ * is the reproducible "no clause" value, never a guessed one).
+ */
+const EMPTY_REQUEST_CLAUSE_SPAN: Span = { start: 0, end: 0 };
+
+/**
  * Builds the MaskedMessage the force scorer receives (SPEC.md §10). Masks
  * every surface Evidence span (the directness match — the head act's own
  * modal/mood realization — plus every non-absorbed downgrader/upgrader
@@ -246,6 +255,50 @@ export function buildMaskedMessage(message: Message, headAct: HeadAct, surface: 
     maskedSpans,
     requestClauseSpan: headAct.span,
     requestSignature: buildRequestSignature(message.text, headAct.span),
+    timestamp: message.timestamp,
+    senderId: message.senderId,
+    recipientIds: [...message.recipientIds],
+  };
+}
+
+/**
+ * Builds a context-only MaskedMessage for a message that carries no
+ * reproducible request of its own — a suppressed message (SPEC.md §6.1) or
+ * a recipient reply like `"done"`/`"sent"` (SPEC.md §11.4's completion
+ * signals). Needed because `force/escalation.ts`'s verified-restatement and
+ * completion-signal logic (SPEC.md §11.4) must see every prior message in
+ * the thread, not only prior requests — but the force scorer must never
+ * receive a raw `Message` (CLAUDE.md rule 3), so this produces the same
+ * `MaskedMessage` shape `buildMaskedMessage` does, without fabricating a
+ * request:
+ *
+ * - `requestClauseSpan` is the deterministic empty `[0, 0)` span (there is
+ *   no head act to point to) and `requestSignature` is `[]`, so this
+ *   message can never satisfy `isSameRequest`'s Jaccard threshold and so
+ *   can never itself count as a verified mention of anything.
+ * - Reproducibly-closed quoted regions are still masked exactly as in
+ *   `buildMaskedMessage`, so a quoted completion signal (`He said "done"`)
+ *   is masked out and cannot be read by `containsCompletionSignal` as if
+ *   the current speaker had said it.
+ * - No surface Evidence exists for a non-request message (there is no
+ *   HeadAct to score surface from), so only the quoted-region masking
+ *   applies here — never surface-evidence-span masking.
+ */
+export function buildContextMaskedMessage(message: Message): MaskedMessage {
+  const chars = message.text.split("");
+  const maskedSpans: Span[] = [];
+
+  for (const quotedSpan of findQuotedSpans(message.text)) {
+    maskSpanInPlace(chars, quotedSpan);
+    maskedSpans.push(quotedSpan);
+  }
+
+  return {
+    messageId: message.id,
+    maskedText: chars.join(""),
+    maskedSpans,
+    requestClauseSpan: EMPTY_REQUEST_CLAUSE_SPAN,
+    requestSignature: [],
     timestamp: message.timestamp,
     senderId: message.senderId,
     recipientIds: [...message.recipientIds],

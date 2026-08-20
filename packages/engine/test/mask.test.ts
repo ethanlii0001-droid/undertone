@@ -7,7 +7,7 @@ import { describe, it, expect } from "vitest";
 import { segmentSentences } from "../src/segment.js";
 import { identifyHeadAct } from "../src/headAct.js";
 import { scoreSurface } from "../src/surface/score.js";
-import { buildMaskedMessage, normalizeActionToken } from "../src/mask.js";
+import { buildContextMaskedMessage, buildMaskedMessage, normalizeActionToken } from "../src/mask.js";
 import type { Message } from "../src/types.js";
 
 let nextId = 0;
@@ -222,5 +222,43 @@ describe("buildMaskedMessage: requestSignature inflection regressions (Prompt 6R
     expect(headAct.strategyName).toBe("query_preparatory"); // detected via "could you", not "get"
     expect(masked.requestSignature).toContain("send");
     expect(masked.requestSignature).not.toContain("sent");
+  });
+});
+
+describe("buildContextMaskedMessage: context-only masking for non-request messages (Prompt 7B)", () => {
+  it("copies messageId/timestamp/senderId/recipientIds normally", () => {
+    const message = buildMessage("done");
+    const masked = buildContextMaskedMessage(message);
+    expect(masked.messageId).toBe(message.id);
+    expect(masked.timestamp).toBe(message.timestamp);
+    expect(masked.senderId).toBe(message.senderId);
+    expect(masked.recipientIds).toEqual(message.recipientIds);
+  });
+
+  it("preserves exact string length (offset-preserving, like buildMaskedMessage)", () => {
+    const text = "sent it over an hour ago";
+    const masked = buildContextMaskedMessage(buildMessage(text));
+    expect(masked.maskedText.length).toBe(text.length);
+  });
+
+  it("does not fabricate a request: empty requestClauseSpan and empty requestSignature", () => {
+    const masked = buildContextMaskedMessage(buildMessage("done"));
+    expect(masked.requestClauseSpan).toEqual({ start: 0, end: 0 });
+    expect(masked.requestSignature).toEqual([]);
+  });
+
+  it("leaves an ordinary completion signal fully visible in maskedText", () => {
+    const masked = buildContextMaskedMessage(buildMessage("done"));
+    expect(masked.maskedText).toBe("done");
+  });
+
+  it("masks a reproducibly-closed quoted completion signal, exactly as buildMaskedMessage masks quotes", () => {
+    const text = 'He said "done" but I have not seen it.';
+    const masked = buildContextMaskedMessage(buildMessage(text));
+    const quoteStart = text.indexOf('"done"');
+    const quoteEnd = quoteStart + '"done"'.length;
+    expect(masked.maskedText.slice(quoteStart, quoteEnd)).toBe(" ".repeat(quoteEnd - quoteStart));
+    expect(masked.maskedText.length).toBe(text.length);
+    expect(masked.maskedSpans).toContainEqual({ start: quoteStart, end: quoteEnd });
   });
 });
