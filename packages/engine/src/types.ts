@@ -5,12 +5,14 @@
  * defined here. No linguistic basis of its own — this file carries the
  * vocabulary the rest of the engine is specified against.
  *
- * ThreadAnalysis, EscalationCluster, GapTrajectoryPoint, and Rewrite are NOT
- * defined in SPEC.md — they are designed here because the engine's public
- * API (SPEC.md §3: `score(thread, config?) => ThreadAnalysis`) needs a
- * return type that doesn't exist yet. Treat these as a proposal: SPEC.md
- * should eventually be updated to make them normative, the same way
- * CLAUDE.md's "Known gaps" tracks rewrite.ts having no rules yet.
+ * ThreadAnalysis is NOT defined in SPEC.md beyond being the named return
+ * type of `score(thread, config?) => ThreadAnalysis` (SPEC.md §3) — it is
+ * kept deliberately minimal here (just `messages`) rather than growing
+ * speculative fields ahead of a normative reason for them. A `rewrite`
+ * field previously existed on MessageAnalysis; it has been removed because
+ * rewrite has no specification yet (CLAUDE.md "Known gaps" #1) and must
+ * not become an API contract early. Add fields back only when SPEC.md (or
+ * LEXICON.md/EVAL.md/CLAUDE.md) specifies them.
  */
 
 // ---------------------------------------------------------------------------
@@ -57,7 +59,14 @@ export interface Thread {
  * explicit assumption, never to smuggle in an implicit default.
  */
 export interface Config {
-  /** Local business-day-end time, "HH:MM", used by the dynamic `today`/EOD/COB temporal ladder (SPEC.md §9.1). Defaults to "17:00" with an assumption flag recorded in evidence if omitted. */
+  /**
+   * Local business-day-end time, "HH:MM", used by the dynamic `today`/EOD/COB
+   * temporal ladder (SPEC.md §9.1). When supplied, it is used directly. When
+   * omitted, dynamic `today` falls back to same-offset local 23:59 and an
+   * assumption flag is recorded in evidence (SPEC.md §9.1) — there is no
+   * silent "17:00" default; the fallback is 23:59, and callers who want
+   * 17:00-style business hours must supply it explicitly.
+   */
   businessDayEnd?: string;
 }
 
@@ -187,13 +196,28 @@ export type GapBand =
  * Why no score was emitted for a message, per the request-detection guards
  * of SPEC.md §6.1. Suppression is the required outcome when no reproducible
  * request can be identified — never a guessed low score (CLAUDE.md rule 4).
+ *
+ * Only two externally-visible values are canonically evidenced in SPEC.md
+ * and EVAL.md, and this type is deliberately restricted to exactly those:
+ *
+ * - `no_head_act` — SPEC.md §6.1's worked example uses this literal tag for
+ *   an information-seeking question (§6.1's example, "Do you know if the
+ *   deck's supposed to be ready before Thursday?"). EVAL.md hc-02
+ *   (information-seeking question) and hc-05 (unrecoverable verbless
+ *   fragment) both use `"suppressed:no_head_act"`. SPEC.md §6.1's "no
+ *   reproducible request pattern exists" guard is the same underlying
+ *   condition (no head act was identified) and is represented the same way.
+ * - `unresolved_addressee` — EVAL.md hc-08 (broadcast request, no
+ *   resolvable addressee) uses `"suppressed:unresolved_addressee"`.
+ *
+ * SPEC.md §6.1's "quoted/reported text" guard has no separately evidenced
+ * tag anywhere in SPEC.md/EVAL.md (EVAL.md hc-09 describes the expected
+ * behavior in prose, not as a `suppressed:X` string) — it is represented as
+ * `no_head_act` here too, since that is the only generally-evidenced "no
+ * request was identified" value. If SPEC.md/EVAL.md later introduce a
+ * distinct tag for it, add that value then; do not invent one now.
  */
-export type SuppressionReason =
-  | "no_request_pattern"
-  | "information_seeking_question"
-  | "quoted_or_reported_text"
-  | "unlinkable_verbless_fragment"
-  | "unresolved_group_addressee";
+export type SuppressionReason = "no_head_act" | "unresolved_addressee";
 
 /**
  * How reliable this rule-based analysis is — not how certain the sender
@@ -204,22 +228,6 @@ export interface Confidence {
   value: number;
   reasons: string[];
   ambiguityFlags: string[];
-}
-
-// ---------------------------------------------------------------------------
-// Rewrite (NOT YET SPECIFIED — see CLAUDE.md "Known gaps" #1)
-// ---------------------------------------------------------------------------
-
-/**
- * A deterministic, force-preserving rewrite of a message's head act.
- * Typed now so MessageAnalysis has a stable shape; do not implement the
- * generator until rewrite rules exist in SPEC.md/LEXICON.md and fixtures
- * exist in EVAL.md/eval/ (CLAUDE.md "Known gaps" #1, rule 8). Until then,
- * every MessageAnalysis.rewrite is `null`.
- */
-export interface Rewrite {
-  text: string;
-  transformations: Array<{ rule: string; before: string; after: string }>;
 }
 
 // ---------------------------------------------------------------------------
@@ -244,41 +252,22 @@ export interface MessageAnalysis {
   confidence: Confidence | null;
   surfaceEvidence: Evidence[];
   forceEvidence: Evidence[];
-  rewrite: Rewrite | null;
   suppressed?: SuppressionReason;
 }
 
 /**
- * One group of messages verified to be re-raising the same request, per
- * SPEC.md §11.2 (shared eventId) and §11.4 (requestSignature matching).
- * NOT YET SPECIFIED in SPEC.md as a named type — see file-level note above.
- */
-export interface EscalationCluster {
-  eventId: string;
-  messageIds: MessageId[];
-  requestSignature: string[];
-}
-
-/** One point in a thread's gap trajectory. NOT YET SPECIFIED in SPEC.md — see file-level note above. */
-export interface GapTrajectoryPoint {
-  messageId: MessageId;
-  gap: number | null;
-}
-
-/**
  * The result of scoring a whole thread: `score(thread, config?) =>
- * ThreadAnalysis` (SPEC.md §3). NOT YET SPECIFIED as a named type in
- * SPEC.md — see file-level note above. `escalationClusters` surfaces
- * SPEC.md §11's repeated-request grouping at the thread level;
- * `gapTrajectory` is one GapTrajectoryPoint per message in thread order,
- * letting a caller see whether the gap is widening/narrowing/flat across a
- * conversation without recomputing it from `messages`.
+ * ThreadAnalysis` (SPEC.md §3). SPEC.md specifies nothing about this type
+ * beyond it being that signature's named return type, so it is kept to
+ * exactly what that signature and the current test suite require. An
+ * earlier version also had `threadId`, `escalationClusters`, and
+ * `gapTrajectory` fields; none of the three are used by any current test,
+ * and none are justified by SPEC.md/LEXICON.md/EVAL.md/CLAUDE.md, so they
+ * were removed rather than kept as speculative output. Add fields back
+ * only when a normative source specifies them.
  */
 export interface ThreadAnalysis {
-  threadId: string;
   messages: MessageAnalysis[];
-  escalationClusters: EscalationCluster[];
-  gapTrajectory: GapTrajectoryPoint[];
 }
 
 // ---------------------------------------------------------------------------

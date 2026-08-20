@@ -39,8 +39,20 @@ import {
 import { negativeControls } from "./fixtures/negative-controls.js";
 import { hardCases } from "./fixtures/hard-cases.js";
 
-/** EVAL.md's deterministic fixture clock: Monday 2026-08-17 09:00:00-04:00, businessDayEnd 17:00. */
-const FIXTURE_TIMESTAMP = new Date("2026-08-17T09:00:00-04:00");
+/**
+ * EVAL.md's deterministic fixture clock (EVAL.md "Deterministic fixture
+ * clock"): Monday 2026-08-17 09:00:00-04:00, businessDayEnd 17:00. Kept as
+ * the literal authoritative string, not round-tripped through
+ * `Date#toISOString()` — that method always renders Z/UTC, which would
+ * silently discard the explicit -04:00 offset. The offset is semantically
+ * relevant to dynamic today/EOD/COB resolution (SPEC.md §9.1), so every
+ * generated fixture timestamp — including minutesBefore-derived
+ * TestThread timestamps — must keep it.
+ */
+const FIXTURE_TIMESTAMP = "2026-08-17T09:00:00-04:00";
+const FIXTURE_OFFSET = "-04:00";
+/** Minutes east of UTC for the fixed -04:00 fixture offset. Never the runtime/local offset. */
+const FIXTURE_OFFSET_MINUTES = -4 * 60;
 const FIXTURE_CONFIG = { businessDayEnd: "17:00" };
 
 const SENDER_IDS: Record<string, string> = {
@@ -56,6 +68,33 @@ function isTestThread(value: string | TestThread): value is TestThread {
   return Array.isArray(value);
 }
 
+/**
+ * Formats the instant `minutesBefore` minutes before FIXTURE_TIMESTAMP as
+ * an ISO 8601 string carrying the same explicit -04:00 offset. Computed
+ * entirely from the fixed offset and epoch arithmetic on the literal
+ * FIXTURE_TIMESTAMP string — never reads `Date.now()` or the runtime's
+ * local timezone (CLAUDE.md rule 1). `minutesBefore === 0` returns the
+ * literal FIXTURE_TIMESTAMP constant rather than a round-tripped value, so
+ * the base fixture timestamp is exactly EVAL.md's authoritative string.
+ */
+function offsetTimestamp(minutesBefore: number): string {
+  if (minutesBefore === 0) return FIXTURE_TIMESTAMP;
+  const baseInstantMs = Date.parse(FIXTURE_TIMESTAMP);
+  const shiftedMs = baseInstantMs - minutesBefore * 60_000;
+  // Read UTC getters on an instant pre-shifted by the fixed -04:00 offset,
+  // so the resulting fields are the -04:00 wall clock without depending on
+  // this machine's own timezone.
+  const wallClock = new Date(shiftedMs + FIXTURE_OFFSET_MINUTES * 60_000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const yyyy = wallClock.getUTCFullYear();
+  const mm = pad(wallClock.getUTCMonth() + 1);
+  const dd = pad(wallClock.getUTCDate());
+  const hh = pad(wallClock.getUTCHours());
+  const mi = pad(wallClock.getUTCMinutes());
+  const ss = pad(wallClock.getUTCSeconds());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss}${FIXTURE_OFFSET}`;
+}
+
 /** Builds a Thread from either a plain string (single message, fixture clock) or a TestThread (minutesBefore-relative multi-message escalation). */
 function buildThread(threadId: string, variant: string | TestThread): Thread {
   if (!isTestThread(variant)) {
@@ -68,7 +107,7 @@ function buildThread(threadId: string, variant: string | TestThread): Thread {
           senderId: resolveParticipant("A"),
           recipientIds: [resolveParticipant("B")],
           mentionedIds: [],
-          timestamp: FIXTURE_TIMESTAMP.toISOString(),
+          timestamp: offsetTimestamp(0),
           text: variant,
         },
       ],
@@ -83,7 +122,7 @@ function buildThread(threadId: string, variant: string | TestThread): Thread {
       senderId: resolveParticipant(item.sender),
       recipientIds: [resolveParticipant(item.recipient)],
       mentionedIds: [],
-      timestamp: new Date(FIXTURE_TIMESTAMP.getTime() - item.minutesBefore * 60_000).toISOString(),
+      timestamp: offsetTimestamp(item.minutesBefore),
       text: item.text,
     })),
   };
@@ -120,6 +159,24 @@ describe("fixture integrity", () => {
 
   it("loads exactly 10 hard cases", () => {
     expect(hardCases.length).toBe(10);
+  });
+
+  it("base single-message fixture timestamp is exactly EVAL.md's deterministic clock, offset preserved", () => {
+    const thread = buildThread("clock-check", "Could you review the deck?");
+    expect(thread.messages[0]?.timestamp).toBe("2026-08-17T09:00:00-04:00");
+  });
+
+  it("minutesBefore-derived TestThread timestamps preserve the -04:00 offset, not Z/UTC", () => {
+    const thread = buildThread("clock-check-thread", [
+      { minutesBefore: 1440, sender: "A", recipient: "B", text: "Could you review the deck?" },
+      { minutesBefore: 0, sender: "A", recipient: "B", text: "Could you review the deck?" },
+    ]);
+    expect(thread.messages[0]?.timestamp).toBe("2026-08-16T09:00:00-04:00");
+    expect(thread.messages[1]?.timestamp).toBe("2026-08-17T09:00:00-04:00");
+    for (const message of thread.messages) {
+      expect(message.timestamp.endsWith("-04:00"), message.timestamp).toBe(true);
+      expect(message.timestamp.endsWith("Z"), message.timestamp).toBe(false);
+    }
   });
 });
 
