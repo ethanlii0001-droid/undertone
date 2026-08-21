@@ -12,7 +12,7 @@ export function ResultsView({ messages, analysis }: ResultsViewProps) {
   const scoredCount = analysis.messages.filter((m) => m.surface !== null).length;
 
   return (
-    <section aria-labelledby="results-heading" className="mx-auto w-full max-w-2xl mt-10">
+    <section aria-labelledby="results-heading" className="mx-auto w-full max-w-3xl mt-10">
       <h2 id="results-heading" tabIndex={-1} className="font-serif-display text-lg mb-4">
         Results
       </h2>
