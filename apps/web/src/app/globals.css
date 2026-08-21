@@ -225,3 +225,24 @@ mark.ev-force:focus .ev-tooltip,
 mark.ev-both:focus .ev-tooltip {
   display: block;
 }
+
+/* At phone widths, a mark near the viewport edge can still push the
+   desktop anchored tooltip (centered via left:50%/translateX(-50%))
+   partially offscreen. Below `sm`, present it instead as a fixed bottom
+   overlay pinned within safe viewport margins, so it's always fully
+   visible regardless of the mark's position. Hover/focus triggers, the
+   accessible name (aria-label/title), and evidence styles are unchanged —
+   only positioning differs. */
+@media (max-width: 639px) {
+  .ev-tooltip {
+    position: fixed;
+    left: 1rem;
+    right: 1rem;
+    bottom: 1rem;
+    top: auto;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    transform: none;
+  }
+}

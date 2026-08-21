@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Source_Serif_4 } from "next/font/google";
 import { SiteNav } from "@/components/SiteNav";
 import { Footer } from "@/components/Footer";
@@ -19,10 +19,33 @@ const sourceSerif = Source_Serif_4({
   subsets: ["latin"],
 });
 
+const TITLE = "UnderTone — Computational Pragmatics";
+const DESCRIPTION =
+  "UnderTone measures the gap between how strongly a workplace request is phrased and the observable context that makes action expected.";
+
 export const metadata: Metadata = {
-  title: "UnderTone",
-  description:
-    "UnderTone separates how strongly a workplace request is phrased from the observable context that makes action expected.",
+  title: TITLE,
+  description: DESCRIPTION,
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    siteName: "UnderTone",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#faf8f3" },
+    { media: "(prefers-color-scheme: dark)", color: "#17150f" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
